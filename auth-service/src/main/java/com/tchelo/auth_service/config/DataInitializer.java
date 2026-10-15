@@ -35,6 +35,16 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Rôle ROLE_ADMIN crée avec succès");
         }
 
+        // Sans lui, sur une base neuve, l'inscription des admins de structure échoue (« rôle introuvable »)
+        if (roleRepository.findByName("ROLE_STRUCTURE_ADMIN").isEmpty()) {
+            Role structureAdminRole = Role.builder()
+                    .name("ROLE_STRUCTURE_ADMIN")
+                    .description("Administrateur d'une structure organisatrice")
+                    .build();
+            roleRepository.save(structureAdminRole);
+            log.info("Rôle ROLE_STRUCTURE_ADMIN crée avec succès");
+        }
+
         log.info("Les données d'initialization de l'authentification de ticket241 sont crée avec succès");
     }
 }

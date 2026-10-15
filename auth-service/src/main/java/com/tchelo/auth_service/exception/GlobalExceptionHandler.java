@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -224,6 +225,46 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(error);
+    }
+
+    // Accès refusé (ex: créer un admin sans être admin, lire les utilisateurs d'une autre structure)
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponseDto> handleAccessDenied(
+            AccessDeniedException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Accès refusé sur {} : {}", request.getRequestURI(), ex.getMessage());
+        return error(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+    }
+
+    // Code d'invitation faux, expiré ou déjà utilisé
+    @ExceptionHandler(InvalidInvitationCodeException.class)
+    public ResponseEntity<ErrorResponseDto> handleInvalidInvitationCode(
+            InvalidInvitationCodeException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Code d'invitation refusé : {}", ex.getMessage());
+        return error(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+    }
+
+    // event-service injoignable : ce n'est pas la faute du code saisi
+    @ExceptionHandler(StructureServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponseDto> handleStructureServiceUnavailable(
+            StructureServiceUnavailableException ex,
+            HttpServletRequest request
+    ) {
+        log.error("Vérification du code d'invitation indisponible : {}", ex.getMessage());
+        return error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
+    }
+
+    private ResponseEntity<ErrorResponseDto> error(HttpStatus status, String message, HttpServletRequest request) {
+        ErrorResponseDto error = ErrorResponseDto.builder()
+                .status(status.value())
+                .message(message)
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(status).body(error);
     }
 
     @ExceptionHandler(IllegalStateException.class)

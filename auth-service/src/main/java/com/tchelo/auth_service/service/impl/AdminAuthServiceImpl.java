@@ -18,9 +18,11 @@ import com.tchelo.auth_service.service.OtpDispatchService;
 import com.tchelo.auth_service.service.StructureAuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -46,10 +48,25 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private final NotificationServiceClient notificationServiceClient;
     private final OtpDispatchService otpDispatchService;
 
+    // Appelant authentifié par son JWT (JwtAuthenticationFilter) et détenteur de ROLE_ADMIN.
+    // Un tempToken MFA (scope pre_mfa) n'authentifie personne : il ne passe pas ce contrôle.
+    private boolean isCallerAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.isAuthenticated()
+                && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+    }
+
     @Override
     @Transactional
     public AuthResponseDto registerAdmin(RegisterAdminDto request) {
 
+        // Un admin général a tous les droits sur la plateforme : seul un admin connecté peut en créer
+        // un autre. Seule exception, l'installation initiale (aucun admin en base) pour créer le premier.
+        if (userRepository.existsByRolesName("ROLE_ADMIN") && !isCallerAdmin()) {
+            throw new AccessDeniedException(
+                    "Seul un administrateur Ticket241 connecté peut créer un compte administrateur");
+        }
 
         if (userRepository.existsByPhone(request.getPhone())) {
             throw new UserAlreadyExistsException(

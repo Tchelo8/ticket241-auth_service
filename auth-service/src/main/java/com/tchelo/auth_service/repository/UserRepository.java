@@ -28,6 +28,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findByStructureId(Long structureId);
 
+    // Existe-t-il au moins un compte avec ce rôle (ex: ROLE_ADMIN, pour fermer l'inscription des admins)
+    boolean existsByRolesName(String roleName);
+
     // Comptes non vérifiés créés avant le seuil, pas encore relancés depuis (ou jamais relancés) :
     // utilisé par le job planifié pour retrouver les OTP jamais reçus par le consommateur Kafka.
     @Query("SELECT u FROM User u WHERE u.enabled = false AND u.createdAt < :threshold " +

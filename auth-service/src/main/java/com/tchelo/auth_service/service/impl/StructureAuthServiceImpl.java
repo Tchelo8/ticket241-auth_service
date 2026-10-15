@@ -1,5 +1,6 @@
 package com.tchelo.auth_service.service.impl;
 
+import com.tchelo.auth_service.client.EventServiceClient;
 import com.tchelo.auth_service.client.NotificationServiceClient;
 import com.tchelo.auth_service.client.dto.OtpVerifyResponseDto;
 import com.tchelo.auth_service.dto.AuthResponseDto;
@@ -21,9 +22,11 @@ import com.tchelo.auth_service.service.OtpDispatchService;
 import com.tchelo.auth_service.service.StructureAuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -47,6 +50,7 @@ public class StructureAuthServiceImpl implements StructureAuthService {
     private final AuthenticationManager authenticationManager;
     private final UserMapper userMapper;
     private final NotificationServiceClient notificationServiceClient;
+    private final EventServiceClient eventServiceClient;
     private final OtpDispatchService otpDispatchService;
 
     @Override
@@ -67,13 +71,10 @@ public class StructureAuthServiceImpl implements StructureAuthService {
             );
         }
 
-        //  TODO: Vérifier que la structure existe (appel vers Event Service via OpenFeign)
-        // Structure structure = structureClient.getStructure(request.getStructureId());
-
-        //  TODO: Valider le code d'invitation
-        // Pour l'instant, on accepte n'importe quel code
-        // En production, vérifier dans une table structure_invitation_codes
-
+        // Le code d'invitation (généré par un admin Ticket241 pour CETTE structure) prouve que la
+        // personne est bien mandatée par la structure. Refus immédiat s'il est faux ou expiré ;
+        // une structure inexistante donne le même refus.
+        eventServiceClient.checkInvitationCode(request.getStructureId(), request.getStructureInvitationCode());
 
         User user = User.builder()
                 .phone(request.getPhone())
@@ -98,8 +99,13 @@ public class StructureAuthServiceImpl implements StructureAuthService {
 
         User savedUser = userRepository.save(user);
 
+        // Consommation atomique du code (usage unique) : si quelqu'un l'a utilisé entre-temps, l'exception
+        // annule toute l'inscription. Fait avant l'envoi de l'OTP pour ne jamais écrire à un compte annulé.
+        eventServiceClient.consumeInvitationCode(request.getStructureId(), request.getStructureInvitationCode());
+
         // Publication bloquante (max 5s) : si Kafka ne confirme pas la réception, on annule
         // toute l'inscription plutôt que de laisser un compte désactivé sans OTP envoyé.
+        // Le code d'invitation, lui, est déjà consommé : il faudra en redemander un.
         otpDispatchService.dispatch(savedUser);
 
         // Pas de JWT ici : le compte reste désactivé (isEnabled=false) tant que le code OTP envoyé
@@ -196,11 +202,28 @@ public class StructureAuthServiceImpl implements StructureAuthService {
         return userMapper.toAuthResponse(user, token, "Connexion admin structure réussie sur Ticket241");
     }
 
+    // Données personnelles (téléphones, emails) : réservé à un admin Ticket241 ou à un admin de CETTE structure.
+    // SecurityConfig exige déjà un JWT valide sur cette route ; ici on vérifie le périmètre.
     @Override
     public List<StructureUserDto> getUsersByStructure(Long structureId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof User caller)) {
+            throw new AccessDeniedException("Authentification requise");
+        }
+        boolean isAdmin = hasRole(caller, "ROLE_ADMIN");
+        boolean isAdminOfThisStructure = hasRole(caller, "ROLE_STRUCTURE_ADMIN")
+                && structureId.equals(caller.getStructureId());
+        if (!isAdmin && !isAdminOfThisStructure) {
+            throw new AccessDeniedException("Vous n'avez pas accès aux utilisateurs de cette structure");
+        }
+
         List<User> users = userRepository.findByStructureId(structureId);
         return users.stream()
                 .map(userMapper::toStructureUserDto)
                 .collect(Collectors.toList());
+    }
+
+    private boolean hasRole(User user, String roleName) {
+        return user.getRoles().stream().anyMatch(role -> roleName.equals(role.getName()));
     }
 }

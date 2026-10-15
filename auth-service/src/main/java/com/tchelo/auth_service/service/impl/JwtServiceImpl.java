@@ -78,6 +78,12 @@ public class JwtServiceImpl implements JwtService {
             claims.put("email", user.getEmail());
         }
 
+        // Identifiant numérique du compte, transmis par la gateway (X-User-Account-Id) : notification-service
+        // range préférences, historique et jetons push par cet identifiant
+        if (user != null && user.getId() != null) {
+            claims.put("uid", user.getId());
+        }
+
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(phone)
