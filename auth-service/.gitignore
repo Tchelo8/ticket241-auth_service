@@ -1,5 +1,8 @@
 HELP.md
 target/
+
+### Secrets locaux (JWT, base de données, clés internes…) : jamais versionnés ###
+config/application.yaml
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

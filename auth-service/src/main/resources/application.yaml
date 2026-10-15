@@ -6,7 +6,8 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/auth_service_db
     username: postgres
-    password: azerty
+    # Secrets : variables d'environnement ou fichier local config/application.yaml (voir config/secrets.example.yaml)
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -52,12 +53,12 @@ kafka:
 notification:
   service:
     base-url: ${NOTIFICATION_SERVICE_BASE_URL:http://localhost:9004}
-  # Doit être IDENTIQUE à notification.internal.api-key côté notification-service
+  # Doit être IDENTIQUE dans auth-service, notification-service et ticket-service
   internal:
-    api-key: ${INTERNAL_API_KEY:change-me-in-production}
+    api-key: ${INTERNAL_API_KEY}
 
 jwt:
-  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
-  # Clé secrète de 256 bits encodée en hexadécimal
-  # EN PRODUCTION : je vais utiliser Spring Cloud Config ou un vault
+  # Clé HMAC encodée en Base64, au moins 256 bits (64 octets générés). Doit être IDENTIQUE à celle de la gateway.
+  # Pas de valeur par défaut : sans secret, le service refuse de démarrer plutôt que de signer avec une clé connue
+  secret: ${JWT_SECRET}
   expiration: 86400000  # 24 heures en millisecondes (24 * 60 * 60 * 1000)
