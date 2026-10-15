@@ -1,0 +1,3 @@
+# Infrastructure gérée en local (PostgreSQL déjà installé sur le poste, port 5432 — cf. application.yaml)
+# Kafka est géré par eureka-server-ticket241
+# Ce fichier est conservé vide intentionnellement
