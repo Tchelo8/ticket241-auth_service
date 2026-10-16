@@ -2,6 +2,7 @@ package com.tchelo.auth_service.service.impl;
 
 import com.tchelo.auth_service.client.EventServiceClient;
 import com.tchelo.auth_service.client.NotificationServiceClient;
+import com.tchelo.auth_service.dto.CreateAgentDto;
 import com.tchelo.auth_service.dto.RegisterAdminDto;
 import com.tchelo.auth_service.dto.RegisterStructureAdminDto;
 import com.tchelo.auth_service.entity.Role;
@@ -164,6 +165,25 @@ class AccessRulesTest {
 
         loggedInAs("ROLE_ADMIN", null);
         assertThat(structureAuthService.getUsersByStructure(2L)).isEmpty();
+    }
+
+    @Test
+    void aStructureAdminCreatesAgentsForItsOwnStructureOnly() {
+        CreateAgentDto agent = CreateAgentDto.builder()
+                .phone("+24177111111").email("agent@test.com").password("secret123")
+                .firstName("Jean").lastName("Ndong")
+                .build();
+
+        loggedInAs("ROLE_STRUCTURE_ADMIN", 1L);
+        assertThat(structureAuthService.createAgent(1L, agent).getStructureId()).isEqualTo(1L);
+        verify(otpDispatchService).dispatch(any(User.class));
+
+        assertThatThrownBy(() -> structureAuthService.createAgent(2L, agent))
+                .isInstanceOf(AccessDeniedException.class);
+
+        loggedInAs("ROLE_AGENT", 1L);
+        assertThatThrownBy(() -> structureAuthService.createAgent(1L, agent))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     private RegisterAdminDto adminRequest() {

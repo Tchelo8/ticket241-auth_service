@@ -24,6 +24,16 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.add.type.headers: false
+  cloud:
+    openfeign:
+      # Depuis Spring Cloud 2022 les clés "feign.*" ne sont plus lues : sans ce bloc, les appels à
+      # notification-service (OTP) et event-service (codes d'invitation) n'avaient pas ces timeouts
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 5000
+            loggerLevel: basic
 
 
 eureka:
@@ -35,14 +45,6 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8781/eureka/
-
-feign:
-  client:
-    config:
-      default:
-        connectTimeout: 5000
-        readTimeout: 5000
-        loggerLevel: basic
 
 kafka:
   enabled: true

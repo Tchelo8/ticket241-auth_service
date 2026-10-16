@@ -84,6 +84,8 @@ public class SecurityConfig {
                         // (le périmètre admin / admin de la structure est vérifié dans StructureAuthService).
                         // Doit rester AVANT la règle /api/auth/** qui ouvre tout le reste.
                         .requestMatchers("/api/auth/structure/*/users").authenticated()
+                        // Création des contrôleurs d'entrée d'une structure : même règle
+                        .requestMatchers("/api/auth/structure/*/agents").authenticated()
                         // Inscription, connexion, OTP, MFA : publics par nature. /admin/register vérifie
                         // lui-même qu'un admin est connecté (sauf première installation).
                         .requestMatchers("/api/auth/**").permitAll()

@@ -45,6 +45,16 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Rôle ROLE_STRUCTURE_ADMIN crée avec succès");
         }
 
+        // Contrôleur d'entrée : scanne les billets des événements de sa structure (/api/tickets/validate)
+        if (roleRepository.findByName("ROLE_AGENT").isEmpty()) {
+            Role agentRole = Role.builder()
+                    .name("ROLE_AGENT")
+                    .description("Contrôleur d'entrée rattaché à une structure")
+                    .build();
+            roleRepository.save(agentRole);
+            log.info("Rôle ROLE_AGENT crée avec succès");
+        }
+
         log.info("Les données d'initialization de l'authentification de ticket241 sont crée avec succès");
     }
 }

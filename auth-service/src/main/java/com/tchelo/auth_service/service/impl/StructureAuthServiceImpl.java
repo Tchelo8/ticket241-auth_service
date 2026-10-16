@@ -4,6 +4,7 @@ import com.tchelo.auth_service.client.EventServiceClient;
 import com.tchelo.auth_service.client.NotificationServiceClient;
 import com.tchelo.auth_service.client.dto.OtpVerifyResponseDto;
 import com.tchelo.auth_service.dto.AuthResponseDto;
+import com.tchelo.auth_service.dto.CreateAgentDto;
 import com.tchelo.auth_service.dto.RegisterStructureAdminDto;
 import com.tchelo.auth_service.dto.LoginStructureAdminDto;
 import com.tchelo.auth_service.dto.StructureUserDto;
@@ -206,6 +207,60 @@ public class StructureAuthServiceImpl implements StructureAuthService {
     // SecurityConfig exige déjà un JWT valide sur cette route ; ici on vérifie le périmètre.
     @Override
     public List<StructureUserDto> getUsersByStructure(Long structureId) {
+        requireStructureAccess(structureId, "Vous n'avez pas accès aux utilisateurs de cette structure");
+
+        List<User> users = userRepository.findByStructureId(structureId);
+        return users.stream()
+                .map(userMapper::toStructureUserDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public AuthResponseDto createAgent(Long structureId, CreateAgentDto request) {
+        requireStructureAccess(structureId, "Seuls les administrateurs de cette structure peuvent créer ses contrôleurs");
+
+        if (userRepository.existsByPhone(request.getPhone())) {
+            throw new UserAlreadyExistsException(
+                    "Ce numéro de téléphone existe déjà sur Ticket241 : " + request.getPhone()
+            );
+        }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new UserAlreadyExistsException(
+                    "Cet email existe déjà sur Ticket241 : " + request.getEmail()
+            );
+        }
+
+        Role agentRole = roleRepository.findByName("ROLE_AGENT")
+                .orElseThrow(() -> new RoleNotFoundException("Le rôle ROLE_AGENT n'existe pas dans Ticket241. "));
+
+        // Même parcours qu'une inscription : compte désactivé jusqu'à la validation de l'OTP reçu par
+        // email (/api/auth/verify-otp), ce qui prouve que l'adresse est bien celle de l'agent
+        User agent = User.builder()
+                .phone(request.getPhone())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .structureId(structureId)
+                .enabled(false)
+                .build();
+        Set<Role> roles = new HashSet<>();
+        roles.add(agentRole);
+        agent.setRoles(roles);
+
+        User savedAgent = userRepository.save(agent);
+        otpDispatchService.dispatch(savedAgent);
+
+        log.info("Contrôleur d'entrée créé pour la structure {} : userId={}", structureId, savedAgent.getId());
+
+        return userMapper.toAuthResponse(savedAgent, null,
+                "Contrôleur créé. Il doit valider le code reçu par email via /api/auth/verify-otp, "
+                        + "puis se connecter via /api/auth/login pour scanner les billets.");
+    }
+
+    // Admin Ticket241, ou admin de CETTE structure (JWT déjà exigé par SecurityConfig sur ces routes)
+    private void requireStructureAccess(Long structureId, String deniedMessage) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof User caller)) {
             throw new AccessDeniedException("Authentification requise");
@@ -214,13 +269,8 @@ public class StructureAuthServiceImpl implements StructureAuthService {
         boolean isAdminOfThisStructure = hasRole(caller, "ROLE_STRUCTURE_ADMIN")
                 && structureId.equals(caller.getStructureId());
         if (!isAdmin && !isAdminOfThisStructure) {
-            throw new AccessDeniedException("Vous n'avez pas accès aux utilisateurs de cette structure");
+            throw new AccessDeniedException(deniedMessage);
         }
-
-        List<User> users = userRepository.findByStructureId(structureId);
-        return users.stream()
-                .map(userMapper::toStructureUserDto)
-                .collect(Collectors.toList());
     }
 
     private boolean hasRole(User user, String roleName) {

@@ -51,4 +51,14 @@ public class StructureAuthController {
         List<StructureUserDto> users = structureAuthService.getUsersByStructure(structureId);
         return ResponseEntity.ok(new StructureUsersResponseDto(users.size(), users));
     }
+
+    // Création d'un contrôleur d'entrée (scanne les billets des événements de la structure)
+    @PostMapping("/{structureId}/agents")
+    public ResponseEntity<AuthResponseDto> createAgent(
+            @PathVariable Long structureId,
+            @Valid @RequestBody CreateAgentDto request
+    ) {
+        AuthResponseDto response = structureAuthService.createAgent(structureId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
 }
