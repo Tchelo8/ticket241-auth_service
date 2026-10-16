@@ -5,6 +5,7 @@ import com.tchelo.auth_service.client.dto.OtpVerifyResponseDto;
 import com.tchelo.auth_service.dto.*;
 import com.tchelo.auth_service.entity.Role;
 import com.tchelo.auth_service.entity.User;
+import com.tchelo.auth_service.exception.AccountNotActiveException;
 import com.tchelo.auth_service.exception.InvalidOtpException;
 import com.tchelo.auth_service.exception.OtpVerificationUnavailableException;
 import com.tchelo.auth_service.exception.RoleNotFoundException;
@@ -12,6 +13,7 @@ import com.tchelo.auth_service.exception.UserAlreadyExistsException;
 import com.tchelo.auth_service.mapper.UserMapper;
 import com.tchelo.auth_service.repository.RoleRepository;
 import com.tchelo.auth_service.repository.UserRepository;
+import com.tchelo.auth_service.service.AccountAvailabilityChecker;
 import com.tchelo.auth_service.service.AdminAuthService;
 import com.tchelo.auth_service.service.JwtService;
 import com.tchelo.auth_service.service.OtpDispatchService;
@@ -40,6 +42,7 @@ import java.util.stream.Collectors;
 public class AdminAuthServiceImpl implements AdminAuthService {
 
     private final UserRepository userRepository;
+    private final AccountAvailabilityChecker accountAvailabilityChecker;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -68,18 +71,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
                     "Seul un administrateur Ticket241 connecté peut créer un compte administrateur");
         }
 
-        if (userRepository.existsByPhone(request.getPhone())) {
-            throw new UserAlreadyExistsException(
-                    "Ce numéro de téléphone existe déjà sur Ticket241 : " + request.getPhone()
-            );
-        }
-
-
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new UserAlreadyExistsException(
-                    "Cet email existe déjà sur Ticket241 : " + request.getEmail()
-            );
-        }
+        accountAvailabilityChecker.requirePhoneAndEmailAvailable(request.getPhone(), request.getEmail());
 
 
 
@@ -124,6 +116,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "Utilisateur non retrouvé avec le numéro : " + request.getPhone()
                 ));
+
+        AccountNotActiveException.requireActive(user);
 
         if (user.isEnabled()) {
             return userMapper.toAuthResponse(user, null,

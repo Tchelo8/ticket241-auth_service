@@ -50,7 +50,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String phone = jwtService.extractPhoneNumber(token);
             if (phone != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(phone);
-                if (jwtService.isTokenValid(token, userDetails)) {
+                // Un compte suspendu ou supprimé garde un JWT signé jusqu'à son expiration : il ne doit
+                // plus authentifier personne ici (les routes protégées répondront 401)
+                if (userDetails.isAccountNonLocked() && jwtService.isTokenValid(token, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails, null, userDetails.getAuthorities());

@@ -3,6 +3,7 @@ package com.tchelo.auth_service.mapper;
 import com.tchelo.auth_service.dto.AuthResponseDto;
 import com.tchelo.auth_service.dto.RegisterRequestDto;
 import com.tchelo.auth_service.dto.StructureUserDto;
+import com.tchelo.auth_service.entity.AccountStatus;
 import com.tchelo.auth_service.entity.Role;
 import com.tchelo.auth_service.entity.User;
 import lombok.extern.slf4j.Slf4j;

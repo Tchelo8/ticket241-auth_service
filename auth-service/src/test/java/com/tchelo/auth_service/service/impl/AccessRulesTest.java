@@ -11,6 +11,7 @@ import com.tchelo.auth_service.exception.InvalidInvitationCodeException;
 import com.tchelo.auth_service.mapper.UserMapper;
 import com.tchelo.auth_service.repository.RoleRepository;
 import com.tchelo.auth_service.repository.UserRepository;
+import com.tchelo.auth_service.service.AccountAvailabilityChecker;
 import com.tchelo.auth_service.service.JwtService;
 import com.tchelo.auth_service.service.OtpDispatchService;
 import org.junit.jupiter.api.AfterEach;
@@ -64,9 +65,10 @@ class AccessRulesTest {
     @BeforeEach
     void setUp() {
         UserMapper userMapper = new UserMapper();
-        structureAuthService = new StructureAuthServiceImpl(userRepository, roleRepository, passwordEncoder, jwtService,
+        AccountAvailabilityChecker availabilityChecker = new AccountAvailabilityChecker(userRepository);
+        structureAuthService = new StructureAuthServiceImpl(userRepository, availabilityChecker, roleRepository, passwordEncoder, jwtService,
                 authenticationManager, userMapper, notificationServiceClient, eventServiceClient, otpDispatchService);
-        adminAuthService = new AdminAuthServiceImpl(userRepository, roleRepository, passwordEncoder, jwtService,
+        adminAuthService = new AdminAuthServiceImpl(userRepository, availabilityChecker, roleRepository, passwordEncoder, jwtService,
                 authenticationManager, userMapper, notificationServiceClient, otpDispatchService);
 
         when(roleRepository.findByName(anyString()))

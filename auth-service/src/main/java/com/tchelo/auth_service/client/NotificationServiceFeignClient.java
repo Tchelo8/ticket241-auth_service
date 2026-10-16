@@ -1,5 +1,6 @@
 package com.tchelo.auth_service.client;
 
+import com.tchelo.auth_service.client.dto.AdminAlertRequestDto;
 import com.tchelo.auth_service.client.dto.OtpVerifyRequestDto;
 import com.tchelo.auth_service.client.dto.OtpVerifyResponseDto;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -12,4 +13,7 @@ public interface NotificationServiceFeignClient {
 
     @PostMapping("/api/notifications/otp/verify")
     OtpVerifyResponseDto verifyOtp(@RequestBody OtpVerifyRequestDto request);
+
+    @PostMapping("/api/notifications/internal/admin-alert")
+    void sendAdminAlert(@RequestBody AdminAlertRequestDto request);
 }

@@ -33,7 +33,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // Comptes non vérifiés créés avant le seuil, pas encore relancés depuis (ou jamais relancés) :
     // utilisé par le job planifié pour retrouver les OTP jamais reçus par le consommateur Kafka.
+    // Les comptes suspendus ou supprimés sont exclus : on ne relance jamais l'OTP d'un compte bloqué.
     @Query("SELECT u FROM User u WHERE u.enabled = false AND u.createdAt < :threshold " +
-            "AND (u.lastOtpDispatchAt IS NULL OR u.lastOtpDispatchAt < :threshold)")
+            "AND (u.lastOtpDispatchAt IS NULL OR u.lastOtpDispatchAt < :threshold) " +
+            "AND (u.accountStatus IS NULL OR u.accountStatus = com.tchelo.auth_service.entity.AccountStatus.ACTIVE)")
     List<User> findPendingOtpDispatch(@Param("threshold") LocalDateTime threshold);
+
+    // Admins de structure encore actifs d'une structure (alerte quand le dernier est retiré)
+    @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE u.structureId = :structureId " +
+            "AND r.name = 'ROLE_STRUCTURE_ADMIN' " +
+            "AND (u.accountStatus IS NULL OR u.accountStatus = com.tchelo.auth_service.entity.AccountStatus.ACTIVE)")
+    long countActiveStructureAdmins(@Param("structureId") Long structureId);
+
+    // Admins Ticket241 encore actifs (on ne retire jamais le dernier ; destinataires des alertes)
+    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = 'ROLE_ADMIN' " +
+            "AND (u.accountStatus IS NULL OR u.accountStatus = com.tchelo.auth_service.entity.AccountStatus.ACTIVE)")
+    List<User> findActivePlatformAdmins();
 }

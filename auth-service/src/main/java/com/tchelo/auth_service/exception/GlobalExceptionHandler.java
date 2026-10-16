@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -234,6 +235,27 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         log.warn("Accès refusé sur {} : {}", request.getRequestURI(), ex.getMessage());
+        return error(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+    }
+
+    // Connexion avec le bon mot de passe sur un compte suspendu ou supprimé
+    @ExceptionHandler(LockedException.class)
+    public ResponseEntity<ErrorResponseDto> handleLockedAccount(
+            LockedException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Connexion refusée sur un compte suspendu ou supprimé");
+        return error(HttpStatus.FORBIDDEN,
+                "Ce compte est suspendu ou supprimé. Contactez le support Ticket241.", request);
+    }
+
+    // OTP, MFA ou autre action sur un compte suspendu ou supprimé
+    @ExceptionHandler(AccountNotActiveException.class)
+    public ResponseEntity<ErrorResponseDto> handleAccountNotActive(
+            AccountNotActiveException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Action refusée sur un compte non actif : {}", ex.getMessage());
         return error(HttpStatus.FORBIDDEN, ex.getMessage(), request);
     }
 

@@ -9,6 +9,7 @@ import com.tchelo.auth_service.dto.ResendOtpRequestDto;
 import com.tchelo.auth_service.dto.VerifyOtpRequestDto;
 import com.tchelo.auth_service.entity.Role;
 import com.tchelo.auth_service.entity.User;
+import com.tchelo.auth_service.exception.AccountNotActiveException;
 import com.tchelo.auth_service.exception.InvalidOtpException;
 import com.tchelo.auth_service.exception.OtpResendTooSoonException;
 import com.tchelo.auth_service.exception.OtpVerificationUnavailableException;
@@ -17,6 +18,7 @@ import com.tchelo.auth_service.exception.UserAlreadyExistsException;
 import com.tchelo.auth_service.mapper.UserMapper;
 import com.tchelo.auth_service.repository.RoleRepository;
 import com.tchelo.auth_service.repository.UserRepository;
+import com.tchelo.auth_service.service.AccountAvailabilityChecker;
 import com.tchelo.auth_service.service.AuthService;
 import com.tchelo.auth_service.service.JwtService;
 import com.tchelo.auth_service.service.OtpDispatchService;
@@ -43,6 +45,7 @@ import java.util.Set;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
+    private final AccountAvailabilityChecker accountAvailabilityChecker;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -59,17 +62,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public AuthResponseDto register(RegisterRequestDto request) {
 
-        if (userRepository.existsByPhone(request.getPhone())) {
-            throw new UserAlreadyExistsException(
-                    "Ce numéro de téléphone existe déjà sur Ticket241 : " + request.getPhone()
-            );
-        }
-
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new UserAlreadyExistsException(
-                    "Cet email existe déjà sur Ticket241 : " + request.getEmail()
-            );
-        }
+        accountAvailabilityChecker.requirePhoneAndEmailAvailable(request.getPhone(), request.getEmail());
 
         User user = userMapper.toEntity(request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -103,6 +96,9 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "Utilisateur non retrouvé avec le numéro : " + request.getPhone()
                 ));
+
+        // Un compte suspendu ou supprimé ne doit pas pouvoir se réactiver par le parcours OTP
+        AccountNotActiveException.requireActive(user);
 
         if (user.isEnabled()) {
             return userMapper.toAuthResponse(user, null,
@@ -149,11 +145,12 @@ public class AuthServiceImpl implements AuthService {
                         "Utilisateur non retrouvé avec le numéro : " + request.getPhone()
                 ));
 
+        AccountNotActiveException.requireActive(user);
+
         if (user.isEnabled()) {
-            // Déjà vérifié : on renvoie simplement un token valide plutôt que d'échouer
-            UserDetails userDetails = userDetailsService.loadUserByUsername(user.getPhone());
-            String token = jwtService.generateToken(user.getPhone(), userDetails);
-            return userMapper.toAuthResponse(user, token, "Compte déjà vérifié");
+            // Déjà vérifié : PAS de token ici. Avant, ce cas renvoyait un JWT sans contrôler le code,
+            // ce qui permettait d'ouvrir le compte de n'importe qui en connaissant son téléphone.
+            return userMapper.toAuthResponse(user, null, "Compte déjà vérifié, connectez-vous via /api/auth/login");
         }
 
         OtpVerifyResponseDto otpResponse;

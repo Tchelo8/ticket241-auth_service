@@ -9,6 +9,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -57,6 +59,18 @@ public class SecurityConfig {
         DaoAuthenticationProvider authProvider =
                 new DaoAuthenticationProvider(userDetailsService);
         authProvider.setPasswordEncoder(passwordEncoder);
+        // L'état du compte (suspendu, supprimé, non vérifié) n'est contrôlé qu'APRÈS le mot de passe :
+        // sans le bon mot de passe, tout le monde reçoit le même "identifiants incorrects", ce qui
+        // évite de révéler à un inconnu le statut d'un numéro de téléphone
+        authProvider.setPreAuthenticationChecks(user -> { });
+        authProvider.setPostAuthenticationChecks(user -> {
+            if (!user.isAccountNonLocked()) {
+                throw new LockedException("Compte suspendu ou supprimé");
+            }
+            if (!user.isEnabled()) {
+                throw new DisabledException("Compte non vérifié");
+            }
+        });
         return authProvider;
     }
 
@@ -86,10 +100,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/structure/*/users").authenticated()
                         // Création des contrôleurs d'entrée d'une structure : même règle
                         .requestMatchers("/api/auth/structure/*/agents").authenticated()
+                        // Cycle de vie des comptes : suppression de son compte, gestion par les admins
+                        // (le périmètre de chacun est vérifié dans AccountManagementService)
+                        .requestMatchers("/api/auth/me", "/api/auth/accounts/**").authenticated()
                         // Inscription, connexion, OTP, MFA : publics par nature. /admin/register vérifie
                         // lui-même qu'un admin est connecté (sauf première installation).
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+                        // Service-à-service : pas de JWT, protégé par la clé interne (InternalApiKeyFilter)
+                        .requestMatchers("/internal/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session

@@ -11,6 +11,7 @@ import com.tchelo.auth_service.dto.StructureUserDto;
 import com.tchelo.auth_service.dto.VerifyOtpRequestDto;
 import com.tchelo.auth_service.entity.Role;
 import com.tchelo.auth_service.entity.User;
+import com.tchelo.auth_service.exception.AccountNotActiveException;
 import com.tchelo.auth_service.exception.InvalidOtpException;
 import com.tchelo.auth_service.exception.OtpVerificationUnavailableException;
 import com.tchelo.auth_service.exception.RoleNotFoundException;
@@ -18,6 +19,7 @@ import com.tchelo.auth_service.exception.UserAlreadyExistsException;
 import com.tchelo.auth_service.mapper.UserMapper;
 import com.tchelo.auth_service.repository.RoleRepository;
 import com.tchelo.auth_service.repository.UserRepository;
+import com.tchelo.auth_service.service.AccountAvailabilityChecker;
 import com.tchelo.auth_service.service.JwtService;
 import com.tchelo.auth_service.service.OtpDispatchService;
 import com.tchelo.auth_service.service.StructureAuthService;
@@ -45,6 +47,7 @@ import java.util.stream.Collectors;
 public class StructureAuthServiceImpl implements StructureAuthService {
 
     private final UserRepository userRepository;
+    private final AccountAvailabilityChecker accountAvailabilityChecker;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -59,18 +62,7 @@ public class StructureAuthServiceImpl implements StructureAuthService {
     public AuthResponseDto registerStructureAdmin(RegisterStructureAdminDto request) {
 
 
-        if (userRepository.existsByPhone(request.getPhone())) {
-            throw new UserAlreadyExistsException(
-                    "Ce numéro de téléphone existe déjà sur Ticket241 : " + request.getPhone()
-            );
-        }
-
-
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new UserAlreadyExistsException(
-                    "Cet email existe déjà sur Ticket241 : " + request.getEmail()
-            );
-        }
+        accountAvailabilityChecker.requirePhoneAndEmailAvailable(request.getPhone(), request.getEmail());
 
         // Le code d'invitation (généré par un admin Ticket241 pour CETTE structure) prouve que la
         // personne est bien mandatée par la structure. Refus immédiat s'il est faux ou expiré ;
@@ -125,14 +117,12 @@ public class StructureAuthServiceImpl implements StructureAuthService {
                         "Utilisateur non retrouvé avec le numéro : " + request.getPhone()
                 ));
 
+        AccountNotActiveException.requireActive(user);
+
         if (user.isEnabled()) {
-            UserDetails userDetails = org.springframework.security.core.userdetails.User
-                    .withUsername(user.getPhone())
-                    .password(user.getPassword())
-                    .authorities(user.getAuthorities())
-                    .build();
-            String token = jwtService.generateToken(user.getPhone(), userDetails);
-            return userMapper.toAuthResponse(user, token, "Compte déjà vérifié");
+            // Déjà vérifié : PAS de token ici (avant, un JWT était renvoyé sans contrôler le code)
+            return userMapper.toAuthResponse(user, null,
+                    "Compte déjà vérifié, connectez-vous via /api/auth/structure/login");
         }
 
         OtpVerifyResponseDto otpResponse;
@@ -220,16 +210,7 @@ public class StructureAuthServiceImpl implements StructureAuthService {
     public AuthResponseDto createAgent(Long structureId, CreateAgentDto request) {
         requireStructureAccess(structureId, "Seuls les administrateurs de cette structure peuvent créer ses contrôleurs");
 
-        if (userRepository.existsByPhone(request.getPhone())) {
-            throw new UserAlreadyExistsException(
-                    "Ce numéro de téléphone existe déjà sur Ticket241 : " + request.getPhone()
-            );
-        }
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new UserAlreadyExistsException(
-                    "Cet email existe déjà sur Ticket241 : " + request.getEmail()
-            );
-        }
+        accountAvailabilityChecker.requirePhoneAndEmailAvailable(request.getPhone(), request.getEmail());
 
         Role agentRole = roleRepository.findByName("ROLE_AGENT")
                 .orElseThrow(() -> new RoleNotFoundException("Le rôle ROLE_AGENT n'existe pas dans Ticket241. "));

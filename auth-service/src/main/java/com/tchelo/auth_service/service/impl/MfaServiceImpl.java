@@ -3,6 +3,7 @@ package com.tchelo.auth_service.service.impl;
 import com.tchelo.auth_service.dto.AuthResponseDto;
 import com.tchelo.auth_service.dto.MfaSetupResponseDto;
 import com.tchelo.auth_service.entity.User;
+import com.tchelo.auth_service.exception.AccountNotActiveException;
 import com.tchelo.auth_service.exception.InvalidCredentialsException;
 import com.tchelo.auth_service.exception.InvalidTotpCodeException;
 import com.tchelo.auth_service.mapper.UserMapper;
@@ -93,9 +94,12 @@ public class MfaServiceImpl implements MfaService {
         return jwtService.extractPhoneNumber(tempToken);
     }
 
+    // Le tempToken a pu être émis juste avant une suspension : on revérifie le statut à chaque étape MFA
     private User findUserByPhone(String phone) {
-        return userRepository.findByPhone(phone)
+        User user = userRepository.findByPhone(phone)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "Utilisateur non retrouvé avec le numéro : " + phone));
+        AccountNotActiveException.requireActive(user);
+        return user;
     }
 }

@@ -81,6 +81,26 @@ public class User implements UserDetails {
     @Builder.Default
     private Integer otpWindowDispatchCount = 0;
 
+    // Statut administratif (voir AccountStatus). null sur les comptes créés avant son ajout = ACTIVE.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_status", length = 20)
+    @Builder.Default
+    private AccountStatus accountStatus = AccountStatus.ACTIVE;
+
+    // Fin d'une suspension temporaire (null = jusqu'à réactivation manuelle)
+    @Column(name = "suspended_until")
+    private LocalDateTime suspendedUntil;
+
+    // Traçabilité du dernier changement de statut : quand, par qui (téléphone), pourquoi
+    @Column(name = "status_changed_at")
+    private LocalDateTime statusChangedAt;
+
+    @Column(name = "status_changed_by", length = 100)
+    private String statusChangedBy;
+
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
+
     // Relation Many-to-Many avec Role
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -127,9 +147,35 @@ public class User implements UserDetails {
         return true;
     }
 
+    // Statut réellement en vigueur : une suspension dont la date de fin est passée ne bloque plus
+    public AccountStatus getEffectiveStatus() {
+        if (accountStatus == null) {
+            return AccountStatus.ACTIVE;
+        }
+        if (accountStatus == AccountStatus.SUSPENDED && suspendedUntil != null
+                && !suspendedUntil.isAfter(LocalDateTime.now())) {
+            return AccountStatus.ACTIVE;
+        }
+        return accountStatus;
+    }
+
+    public boolean isActiveAccount() {
+        return getEffectiveStatus() == AccountStatus.ACTIVE;
+    }
+
+    public void changeStatus(AccountStatus newStatus, LocalDateTime until, String changedBy, String reason) {
+        this.accountStatus = newStatus;
+        this.suspendedUntil = newStatus == AccountStatus.SUSPENDED ? until : null;
+        this.statusChangedAt = LocalDateTime.now();
+        this.statusChangedBy = changedBy;
+        this.statusReason = reason;
+    }
+
+    // Spring Security refuse la connexion d'un compte "verrouillé" (LockedException) : c'est ainsi qu'un
+    // compte suspendu ou supprimé ne peut plus se connecter, indépendamment de la vérification de l'email
     @Override
     public boolean isAccountNonLocked() {
-        return true;
+        return isActiveAccount();
     }
 
     @Override
