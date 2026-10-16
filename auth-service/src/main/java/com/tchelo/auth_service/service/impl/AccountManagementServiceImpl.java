@@ -4,6 +4,7 @@ import com.tchelo.auth_service.client.NotificationServiceClient;
 import com.tchelo.auth_service.dto.AccountStatusChangeDto;
 import com.tchelo.auth_service.dto.AccountSummaryDto;
 import com.tchelo.auth_service.dto.DeleteMyAccountDto;
+import com.tchelo.auth_service.dto.UpdateProfileDto;
 import com.tchelo.auth_service.entity.AccountStatus;
 import com.tchelo.auth_service.entity.Role;
 import com.tchelo.auth_service.entity.User;
@@ -100,6 +101,23 @@ public class AccountManagementServiceImpl implements AccountManagementService {
         log.info("Compte {} réactivé par {}", target.getId(), caller.getPhone());
 
         return toSummary(target, "Compte réactivé");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AccountSummaryDto getMyAccount() {
+        return toSummary(currentUser(), null);
+    }
+
+    @Override
+    @Transactional
+    public AccountSummaryDto updateMyProfile(UpdateProfileDto request) {
+        User caller = currentUser();
+        caller.setFirstName(request.getFirstName().trim());
+        caller.setLastName(request.getLastName().trim());
+        User saved = userRepository.save(caller);
+        log.info("Profil mis à jour pour le compte {}", saved.getId());
+        return toSummary(saved, "Profil mis à jour");
     }
 
     @Override

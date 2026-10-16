@@ -3,6 +3,7 @@ package com.tchelo.auth_service.controller;
 import com.tchelo.auth_service.dto.AccountStatusChangeDto;
 import com.tchelo.auth_service.dto.AccountSummaryDto;
 import com.tchelo.auth_service.dto.DeleteMyAccountDto;
+import com.tchelo.auth_service.dto.UpdateProfileDto;
 import com.tchelo.auth_service.service.AccountManagementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,18 @@ import org.springframework.web.bind.annotation.*;
 public class AccountController {
 
     private final AccountManagementService accountManagementService;
+
+    // Profil de la personne connectée (statut du compte compris)
+    @GetMapping("/me")
+    public ResponseEntity<AccountSummaryDto> getMyAccount() {
+        return ResponseEntity.ok(accountManagementService.getMyAccount());
+    }
+
+    // Prénom et nom ; l'email et le téléphone ne se modifient pas encore (revérification à prévoir)
+    @PutMapping("/me")
+    public ResponseEntity<AccountSummaryDto> updateMyProfile(@Valid @RequestBody UpdateProfileDto request) {
+        return ResponseEntity.ok(accountManagementService.updateMyProfile(request));
+    }
 
     // Le titulaire supprime son propre compte (mot de passe redemandé)
     @DeleteMapping("/me")

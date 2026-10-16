@@ -176,6 +176,18 @@ class AccountLifecycleTest {
     }
 
     @Test
+    void aUserUpdatesOnlyTheirOwnNames() {
+        loggedInAs(client);
+
+        var updated = accountService.updateMyProfile(new com.tchelo.auth_service.dto.UpdateProfileDto("  Awa ", "Mba"));
+
+        assertThat(updated.getFirstName()).isEqualTo("Awa");
+        assertThat(client.getLastName()).isEqualTo("Mba");
+        assertThat(client.getPhone()).isEqualTo("+24160000006");
+        assertThat(accountService.getMyAccount().getId()).isEqualTo(6L);
+    }
+
+    @Test
     void aTemporarySuspensionEndsByItself() {
         client.changeStatus(AccountStatus.SUSPENDED, LocalDateTime.now().minusMinutes(1), "admin", null);
         assertThat(client.isActiveAccount()).isTrue();
