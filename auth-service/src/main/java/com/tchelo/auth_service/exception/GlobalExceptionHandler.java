@@ -249,6 +249,17 @@ public class GlobalExceptionHandler {
                 "Ce compte est suspendu ou supprimé. Contactez le support Ticket241.", request);
     }
 
+    // Mot de passe redemandé pour confirmer une action (ex: suppression de son compte) : 400 et pas
+    // 401, la session reste valide (un 401 déconnecterait le front)
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ErrorResponseDto> handleInvalidCredentials(
+            InvalidCredentialsException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Confirmation par mot de passe refusée : {}", ex.getMessage());
+        return error(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
     // OTP, MFA ou autre action sur un compte suspendu ou supprimé
     @ExceptionHandler(AccountNotActiveException.class)
     public ResponseEntity<ErrorResponseDto> handleAccountNotActive(
